@@ -1,0 +1,438 @@
+﻿@model TaskManager.Models.Tasks
+
+
+<h2>Tasks</h2>
+
+<p>
+    <input type="submit" id="addTask" value="Add New Task" />
+
+</p>
+Category:
+<select id="catbrowse">
+    <option value="0">- All -</option>
+    @foreach (var obj in Model.Categories)
+    {
+        <option value="@obj.CategoryId">@obj.CategoryName</option>
+    }
+</select>
+
+&nbsp;&nbsp;Status:
+<select id="statusbrowse">
+    <option value="0">- All -</option>
+    @foreach (var obj in Model.Status)
+    {
+        <option value="@obj.StatusId">@obj.Status</option>
+    }
+</select>
+
+<div id="taskListContainer">
+</div>
+<div id="taskEditContainer">
+</div>
+<div id="reassingTaskPlaceHolder">
+</div>
+<div id="taskStatsContainer">
+</div>
+
+<div id="reassignListContainer">
+    <select id="reassignUser">
+        @foreach (var obj in Model.Profiles)
+        {
+            <option value="@obj.UserId">@obj.UserName</option>
+        }
+    </select>
+    <input type="submit" id="reassignThisTask" value=">" />
+</div>
+
+<script id="taskList" type="text/html">
+
+    <table>
+        <thead>
+            <th>Edit</th>
+            <th style="width: 40px">Reassign</th>
+            <th style="width: 200px">Due Date</th>
+            <th style="width: 300px">Task</th>
+            <th style="width: 100px">Status</th>
+            <th>Priority</th>
+            <th>Category</th>
+            <th>Delete</th>
+        </thead>
+        <tbody>
+            {{#each taskdetails}}
+    <tr data-id="{{TaskId}}" class="taskRow {{StatusClass}}">
+        <td>
+            <button class="editTask">Edit</button></td>
+        <td>
+            <button class="reassignTask">>></button></td>
+        <td>{{date DueDate}}</td>
+        <td>{{Name}}</td>
+        <td>{{Status}}</td>
+        <td>{{Priority}}</td>
+        <td>{{Category}}</td>
+        <td><a href="javascript:void(0)" class="deleteTask">[x]</a></td>
+    </tr>
+            {{/each}}
+        </tbody>
+    </table>
+
+</script>
+<script id="taskEdit" type="text/html">
+    <form>
+        <input type="hidden" id="id" value="{{TaskId}}" />
+        <div class="frow">
+            <label for="Name">Task Name:</label>
+            <input type="text" style="width: 400px" maxlength="200" name="Name" id="name" required value="{{Name}}" />
+        </div>
+        <div class="frow">
+            <label for="Description">Task Description:</label>
+            <textarea rows="4" style="width: 400px" name="Description" id="taskbody">{{Body}}</textarea>
+        </div>
+        <div class="frow">
+            Due date: 
+            <input type="text" style="width: 120px" maxlength="50" name="Name" id="duedate" required value="{{basicdate DueDate}}" />
+            Status:
+              <select id="status">
+                  {{#select StatusId}}
+                  @foreach (var obj in Model.Status)
+                  {
+                      <option value="@obj.StatusId">@obj.Status</option>
+                  }
+                  {{/select}}
+              </select>
+
+            Priority:
+              <select id="priority">
+                  {{#select PriorityId}}
+                  @foreach (var obj in Model.Priorities)
+                  {
+                      <option value="@obj.PriorityId">@obj.Priority</option>
+                  }
+                  {{/select}}
+              </select>
+
+            Category:
+              <select id="category">
+                  {{#select CategoryId}}
+                  @foreach (var obj in Model.Categories)
+                  {
+                      <option value="@obj.CategoryId">@obj.CategoryName</option>
+                  }
+                  {{/select}}
+              </select>
+
+
+        </div>
+
+
+    </form>
+
+</script>
+<script id="taskStats" type="text/html">
+    <table>
+        <tr>
+            <td>Total Tasks</td>
+            <td>{{TotalTasks}}</td>
+            <td>Pending</td>
+            <td>{{PendingTask}}</td>
+            <td>Past Due</td>
+            <td>{{PastDueTasks}}</td>
+            <td>Completed</td>
+            <td>{{CompletedTasks}}</td>
+
+        </tr>
+    </table>
+</script>
+
+
+@section scripts{
+    <script src="~/Scripts/handlebars.js"></script>
+    <script src="~/Scripts/moment.js"></script>
+
+    <script>
+        var taskApi = (function () {
+            var taskApiUrl = '@Url.RouteUrl("DefaultApi", new { httproute = "", controller = "tasks" })';
+            var taskReassignApiUrl = '@Url.RouteUrl("DefaultApi", new { httproute = "", controller = "taskReassign" })';
+            var taskStatsApiUrl = '@Url.RouteUrl("DefaultApi", new { httproute = "", controller = "taskStatistics" })';
+
+            //error handeling
+            $(document).ajaxError(function (event, ex) {
+                alert("Error: " + ex.status);
+            });
+
+            var getTasks = function () {
+                return $.ajax(taskApiUrl + "?cat=" + $("#catbrowse").val() + "&status=" + $("#statusbrowse").val());
+            };
+
+            var getTask = function (id) {
+                return $.ajax(taskApiUrl + "/" + id);
+            };
+
+            var updateTask = function (task) {
+                return $.ajax(taskApiUrl + "/" + task.TaskId,
+                    {
+                        type: "PUT",
+                        data: task
+                    });
+            };
+
+            var addTask = function (task) {
+                return $.ajax(taskApiUrl,
+                    {
+                        type: "POST",
+                        data: task
+                    });
+            };
+
+            var removeTask = function (taskId) {
+                if (!confirm('Delete Task?')) {
+                    return false;
+                }
+
+                return $.ajax(taskApiUrl + "/" + taskId,
+                    {
+                        type: "DELETE",
+                    });
+            };
+
+
+            var postReassignTask = function (task) {
+                return $.ajax(taskReassignApiUrl + "/" + task.TaskId,
+                    {
+                        type: "PUT",
+                        data: task
+                    });
+            };
+
+            var getTaskStats = function () {
+                return $.ajax(taskStatsApiUrl);
+            };
+
+
+            return {
+                getTasks: getTasks,
+                getTask: getTask,
+                updateTask: updateTask,
+                addTask: addTask,
+                removeTask: removeTask,
+                postReassignTask: postReassignTask,
+                getTaskStats: getTaskStats,
+            };
+
+        }());
+
+        (function () {
+
+            //wire click events
+            var wireEvents = function () {
+                $(document).on("click", ".editTask", editTask);
+                $(document).on("click", ".reassignTask", viewReassignTask);
+                $(document).on("click", "#reassignThisTask", reassignTask);
+                $(document).on("click", ".deleteTask", deleteTask);
+                $(document).on("click", "#saveTask", saveTask);
+                $(document).on("click", "#addTask", createTask);
+                $(document).on("focus", "#duedate", function () { $(this).datepicker(); });
+                $(document).on("change", "#catbrowse", reloadTasks);
+                $(document).on("change", "#statusbrowse", reloadTasks);
+
+
+                window.Handlebars.registerHelper('select', function (value, options) {
+                    var $el = $('<select />').html(options.fn(this));
+                    $el.find('[value=' + value + ']').attr({ 'selected': 'selected' });
+                    return $el.html();
+                });
+
+                window.Handlebars.registerHelper('date', function (date, options) {
+                    try {
+                        var parsed_date = moment(date).calendar();
+                        return parsed_date
+                    }
+                    catch (err) {
+                        return "N/A";
+                    };
+
+                });
+                window.Handlebars.registerHelper('basicdate', function (date, options) {
+                    try {
+                        var formatter = 'MM/DD/YY';
+                        var parsed_date = moment(date);
+                        var formatted_date = parsed_date.format(formatter);
+                        return formatted_date
+                    }
+                    catch (err) {
+                        return "";
+                    };
+
+                });
+
+
+            };
+
+            //bind UI
+            var bindUI = function () {
+
+                $("#taskEditContainer").dialog({
+                    autoOpen: false,
+                    height: 400,
+                    width: 650,
+                    modal: true,
+                    buttons: {
+                        "Save": function () {
+                            saveTask();
+                            $(this).dialog("close");
+
+                        },
+                        Cancel: function () {
+                            $(this).dialog("close");
+                        }
+                    }
+
+
+                });
+            }
+
+            var prevReassign;
+            //templates
+            var templates = {};
+
+            var compileTemplates = function () {
+                templates.taskList = Handlebars.compile($("#taskList").html());
+                templates.taskEdit = Handlebars.compile($("#taskEdit").html());
+                templates.taskStats = Handlebars.compile($("#taskStats").html());
+
+            }
+
+            //view all tasks
+            var viewAllTasks = function (data) {
+                var output = templates.taskList({ taskdetails: data });
+                $("#taskListContainer").html(output);
+
+            };
+
+            var reloadTasks = function () {
+                $("#reassingTaskPlaceHolder").append($("#reassignListContainer"));
+                taskApi.getTasks().done(viewAllTasks);
+                loadTaskStats();
+            };
+
+            //Task Stat
+            var viewTasksStats = function (taskStats) {
+                var output = templates.taskStats(taskStats);
+                $("#taskStatsContainer").html(output);
+
+            };
+
+            var loadTaskStats = function () {
+                taskApi.getTaskStats().done(viewTasksStats);
+            }
+
+            //edit task
+            var viewEditTask = function (task) {
+                var output = templates.taskEdit(task)
+                $("#taskEditContainer").html(output);
+                $('#taskEditContainer')
+                   .dialog('option', 'title', "Editing "
+                       + $(this).closest('tr').find('td:first').text())
+                   .dialog('open');
+
+            };
+
+            var editTask = function () {
+                var taskId = getId(this);
+                taskApi.getTask(taskId).done(viewEditTask);
+            };
+
+            //reassign
+            var viewReassignTask = function () {
+                if (prevReassign != null)
+                    prevReassign.show();
+                prevReassign = $(this);
+                $(this).hide();
+                var usersList = $("#reassignListContainer");
+                usersList.show();
+                $(this).parent("td").append(usersList);
+            };
+
+            var reassignTask = function () {
+                var task = {
+                    "TaskId": getId(this),
+                    "ToUserId": $("#reassignUser").val(),
+                };
+
+                var row = $(this).parents("tr");
+                taskApi.postReassignTask(task).done(function () {
+                    row.hide();
+                    loadTaskStats();
+                });
+            };
+
+            //delete task
+            var deleteTask = function () {
+                var taskId = getId(this);
+                var row = $(this).parents("tr");
+                taskApi.removeTask(taskId).done(function () {
+                    row.hide();
+                    loadTaskStats();
+                });
+            };
+
+            //save task
+
+
+            var saveTask = function () {
+                var task = {
+                    "TaskId": $("#id").val(),
+                    "Name": $("#name").val(),
+                    "Body": $("#taskbody").val(),
+                    "DueDate": $("#duedate").val(),
+                    "PriorityId": $("#priority").val(),
+                    "StatusId": $("#status").val(),
+                    "CategoryId": $("#category").val(),
+
+                };
+                var event;
+                if (task.TaskId != "0") {
+                    event = taskApi.updateTask(task);
+                } else {
+                    event = taskApi.addTask(task);
+                }
+
+                event.done(taskSaved);
+                return false;
+
+            }
+
+            var taskSaved = function () {
+                $("#taskEditContainer").empty();
+                $("#taskEditContainer").dialog("close");
+                reloadTasks();
+                //alert('Saved');
+            }
+
+            //create task
+            var createTask = function () {
+                var task = {
+                    "TaskId": "0",
+                    "Name": "",
+                    "Body": "",
+                };
+                viewEditTask(task);
+            }
+
+            //get the task ID
+            var getId = function (element) {
+                return $(element).parents("tr").attr("data-id");
+            };
+
+            $(function () {
+                wireEvents();
+                compileTemplates();
+                reloadTasks();
+                bindUI();
+            });
+
+        }());
+
+
+
+    </script>
+}
